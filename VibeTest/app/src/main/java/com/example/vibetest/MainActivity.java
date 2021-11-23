@@ -30,14 +30,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private SensorManager sensorManager;
     private Sensor accel;
     //private Sensor gyro;
-    private Long startTime;
-    private Long curTime;
+//    private Long startTime;
+//    private Long curTime;
     float[] accelerometer_data = new float[3];
     float[] gravity = new float[3];
     String filename = "vibecheck.csv";
 
     // buttons for all the types of the vibration effects
-    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, bHeavyClickVibration;
+    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, bHeavyClickVibration, bStopRanging;
+
+    private boolean startRanging = false;
+    private Long rangingStartTime = null;
+    private Long t4 = null;
+    private Long currTime = null;
+
+    private boolean signalReceived = false;
+    private Boolean prevSignalReceived = null;
+    private boolean firstTime = true;
 
     private final int duration = 5; // seconds
     //    private final int sampleRate = 21000;
@@ -81,15 +90,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if(startTime == null){
-            startTime = event.timestamp;
-        }
-        curTime = event.timestamp - startTime;
-        switch (event.sensor.getType()) {
+        if (!startRanging || rangingStartTime == null)
+            return;
 
+        currTime = event.timestamp;
+        switch (event.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
                 final float alpha = 0.8f;
-
                 // Isolate the force of gravity with the low-pass filter.
                 //gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
                 //gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
@@ -98,20 +105,66 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 //accelerometer_data[0] = event.values[0] - gravity[0];
                 //accelerometer_data[1] = event.values[1] - gravity[1];
                 accelerometer_data[2] = event.values[2] - gravity[2];
+
+                if (System.nanoTime() - rangingStartTime > 5 * 1000000000) {
+                    if (Math.abs(accelerometer_data[2]) > 0.13) {
+                        signalReceived = true;
+                        prevSignalReceived = true;
+                        if (firstTime) {
+                            firstTime = false;
+                            t4 = System.nanoTime();
+                            final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                            new Handler().postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    final Thread vibeThread = new Thread(() -> {
+                                        final VibrationEffect vibrationEffect1;
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                            // this effect creates the vibration of default amplitude for 1000ms(1 sec)
+                                            vibrationEffect1 = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE);
+                                            // it is safe to cancel other vibrations currently taking place
+                                            vibrator.cancel();
+                                            vibrator.vibrate(vibrationEffect1);
+                                        }
+                                        else {
+                                            ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(1500);
+                                        }
+                                    });
+
+
+                                    vibeThread.start();
+                                }
+                            }, 5000);
+                        }
+                    } else {
+                        if (prevSignalReceived == null || !prevSignalReceived) {
+                            signalReceived = false;
+                            prevSignalReceived = false;
+                        } else {
+                            signalReceived = true;
+                            prevSignalReceived = false;
+                        }
+                    }
+                }
+
+
+
                 try (OutputStreamWriter output = new OutputStreamWriter(openFileOutput(filename, Context.MODE_APPEND))) {
-                    output.write(String.valueOf(curTime));
+                    output.write(String.valueOf(rangingStartTime));
+                    output.write(",");
+                    output.write(String.valueOf(currTime));
                     output.write(",");
 
                     /*
                     output.write(String.valueOf(accelerometer_data[0]));
-
-
                     output.write(",");
                     output.write(String.valueOf(accelerometer_data[1]));
                     output.write(",");
                     */
 
                     output.write(String.valueOf(accelerometer_data[2]));
+                    output.write(",");
+                    output.write(String.valueOf(signalReceived));
                     output.write("\n");
 
                 } catch (FileNotFoundException e) {
@@ -147,26 +200,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bDoubleClickVibration = findViewById(R.id.doubleClickVibrationButton);
         bTickVibration = findViewById(R.id.tickVibrationButton);
         bHeavyClickVibration = findViewById(R.id.heavyClickVibrationButton);
+        bStopRanging = findViewById(R.id.stopRangingButton);
 
         // handle normal vibration button
         bNormalVibration.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (startRanging) {
+                    Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging has started!", Toast.LENGTH_SHORT);
+                    invalidClick.show();
+                    return;
+                }
+
+                File f = new File(getFilesDir(), filename);
+                f.delete();
+                startRanging = true;
+                firstTime = true;
 
                 // this is the only type of the vibration which requires system version Oreo (API 26)
-
-                final Thread soundThread = new Thread(() -> {
-                    genTone();
-                    handler.post(() -> playSound());
-                });
+//                final Thread soundThread = new Thread(() -> {
+//                    genTone();
+//                    handler.post(() -> playSound());
+//                });
 
                 final Thread vibeThread = new Thread(() -> {
                     final VibrationEffect vibrationEffect1;
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-
                         // this effect creates the vibration of default amplitude for 1000ms(1 sec)
                         vibrationEffect1 = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE);
-
                         // it is safe to cancel other vibrations currently taking place
                         vibrator.cancel();
                         vibrator.vibrate(vibrationEffect1);
@@ -176,9 +237,44 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
                 });
 
-                soundThread.start();
+                rangingStartTime = System.nanoTime();
+//                soundThread.start();
                 vibeThread.start();
 
+//                new Handler().postDelayed(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        final Thread vibeThread = new Thread(() -> {
+//                            final VibrationEffect vibrationEffect1;
+//                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+//                                // this effect creates the vibration of default amplitude for 1000ms(1 sec)
+//                                vibrationEffect1 = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE);
+//                                // it is safe to cancel other vibrations currently taking place
+//                                vibrator.cancel();
+//                                vibrator.vibrate(vibrationEffect1);
+//                            }
+//                            else {
+//                                ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(1500);
+//                            }
+//                        });
+//                        vibeThread.start();
+//                    }
+//                }, 5000);
+
+            }
+        });
+
+        bStopRanging.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!startRanging) {
+                    Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging hasn't started.", Toast.LENGTH_SHORT);
+                    invalidClick.show();
+                    return;
+                }
+
+                startRanging = false;
+                rangingStartTime = null;
             }
         });
 
