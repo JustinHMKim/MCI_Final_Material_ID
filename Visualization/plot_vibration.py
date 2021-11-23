@@ -3,10 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-filename = "vibecheck.csv"
+filename_transmitter = "transmitter_data.csv"
+filename_receiver = "receiver_data.csv"
 
 
-def plot():
+def plot(filename):
     df = pd.read_csv(
         filename, names=["ranging Tstart", "acc timestamp", "acc z", "signal received"]
     )
@@ -18,8 +19,11 @@ def plot():
         group.plot(
             ax=plt.gca(), kind="line", x="acc timestamp", y="acc z", color=colors[key]
         )
-    plt.show()
 
 
 if __name__ == "__main__":
-    plot()
+    plt.subplot(1, 2, 1)
+    plot(filename_transmitter)
+    plt.subplot(1, 2, 2)
+    plot(filename_receiver)
+    plt.show()
