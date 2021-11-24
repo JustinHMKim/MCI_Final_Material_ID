@@ -6,8 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".MainActivity"
-    tools:ignore="HardcodedText">
+    tools:context=".MainActivity">
 
     <!--Button to generate normal vibration-->
     <Button
@@ -62,16 +61,24 @@
         app:layout_constraintTop_toBottomOf="@id/doubleClickVibrationButton" />
 
     <!--Button to generate heavy click vibration-->
+
     <Button
-        android:id="@+id/heavyClickVibrationButton"
+        android:id="@+id/startStopButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="140dp"
         android:backgroundTint="@color/colorPrimary"
-        android:text="HEAVY CLICK EFFECT VIBRATION"
+        android:text="startStopButton"
         android:textColor="@android:color/white"
+        app:layout_constraintHorizontal_bias="0.495"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tickVibrationButton" />
 
+
+    <ImageView android:id="@+id/ImageView01" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" app:layout_constraintBottom_toTopOf="@+id/startStopButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+    </ImageView>
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,31 +1,154 @@
 package com.example.vibetest;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioFormat;
 import android.media.AudioManager;
+import android.media.AudioRecord;
 import android.media.AudioTrack;
+import android.media.MediaRecorder;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
+
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-import java.util.Arrays;
-import java.util.List;
+
+import ca.uol.aig.fftpack.RealDoubleFFT;
+
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
+    int channelConfiguration = AudioFormat.CHANNEL_CONFIGURATION_MONO;
+    int audioEncoding = AudioFormat.ENCODING_PCM_16BIT;
+    private RealDoubleFFT transformer;
+    int blockSize = 256;                         // deal with this many samples at a time
+    boolean started = false;
+    public int frequency = 21000;                      // the frequency given
+    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, startStopButton;
+    boolean ultraSound = false;
+    RecordAudio recordTask;
 
+    ImageView imageView;
+    Bitmap bitmap;
+    Canvas canvas;
+    Paint paint;
+
+    public class RecordAudio extends AsyncTask<Void, double[], Void> {
+        public void run() {
+
+            Toast.makeText(getApplicationContext(), "Example for Toast", Toast.LENGTH_SHORT).show();
+
+        }
+        @Override
+        protected Void doInBackground(Void... arg0) {
+
+            try {
+                // int bufferSize = AudioRecord.getMinBufferSize(frequency,
+                // AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                int bufferSize = AudioRecord.getMinBufferSize(frequency,
+                        channelConfiguration, audioEncoding);
+
+                if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return null;
+                }
+                AudioRecord audioRecord = new AudioRecord(
+                        MediaRecorder.AudioSource.MIC, frequency,
+                        channelConfiguration, audioEncoding, bufferSize);
+
+                short[] buffer = new short[blockSize];
+                double[] toTransform = new double[blockSize];
+
+                audioRecord.startRecording();
+
+                // started = true; hopes this should true before calling
+                // following while loop
+                while (started) {
+                    int bufferReadResult = audioRecord.read(buffer, 0,
+                            blockSize);
+
+                    for (int i = 0; i < blockSize && i < bufferReadResult; i++) {
+                        toTransform[i] = (double) buffer[i] / 32767.0; // signed
+                        // 16
+                    }                                       // bit
+                    transformer.ft(toTransform);
+                    /*
+                    for( int j = 0; j < toTransform.length; j++){
+                        if(toTransform[j] > 2100){
+                            Log.e("AudioRecord", "Recording 20khz");
+                            ultraSound = true;
+                            started = false;
+
+                            audioRecord.stop();
+                        }
+                    }
+                    */
+
+                    publishProgress(toTransform);
+
+
+
+                }
+
+                audioRecord.stop();
+                run();
+
+            } catch (Throwable t) {
+                t.printStackTrace();
+                Log.e("AudioRecord", "Recording Failed");
+            }
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(double[]... toTransform) {
+
+            canvas.drawColor(Color.BLACK);
+
+            for (int i = 0; i < toTransform[0].length; i++) {
+                int x = i;
+                int downy = (int) (100 - (toTransform[0][i] * 10));
+                int upy = 100;
+
+                canvas.drawLine(x, downy, x, upy, paint);
+            }
+
+            imageView.invalidate();
+
+            // TODO Auto-generated method stub
+            // super.onProgressUpdate(values);
+        }
+
+    }
 
     private SensorManager sensorManager;
     private Sensor accel;
@@ -35,9 +158,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     float[] accelerometer_data = new float[3];
     float[] gravity = new float[3];
     String filename = "vibecheck.csv";
+    TextView tv;
 
     // buttons for all the types of the vibration effects
-    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, bHeavyClickVibration;
 
     private final int duration = 5; // seconds
     //    private final int sampleRate = 21000;
@@ -47,11 +170,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private final byte[] generatedSnd = new byte[2 * numSamples];
 
+    // construct AudioRecord to record audio from microphone with sample rate of 44100Hz
+
+
     void genTone() {
         // fill out the array
         for (int i = 0; i < numSamples; ++i) {
             // hz
-            double freqOfTone = 2000;
+            double freqOfTone = 21000;
             sample[i] = Math.sin(2 * Math.PI * i / (sampleRate / freqOfTone));
         }
 
@@ -128,9 +254,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        transformer = new RealDoubleFFT(blockSize);
+
+        imageView = (ImageView) this.findViewById(R.id.ImageView01);
+        bitmap = Bitmap.createBitmap((int) 256, (int) 100,
+                Bitmap.Config.ARGB_8888);
+        canvas = new Canvas(bitmap);
+        paint = new Paint();
+        paint.setColor(Color.GREEN);
+        imageView.setImageBitmap(bitmap);
+
+
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -146,7 +282,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bClickVibration = findViewById(R.id.clickVibrationButton);
         bDoubleClickVibration = findViewById(R.id.doubleClickVibrationButton);
         bTickVibration = findViewById(R.id.tickVibrationButton);
-        bHeavyClickVibration = findViewById(R.id.heavyClickVibrationButton);
+        startStopButton = findViewById(R.id.startStopButton);
 
         // handle normal vibration button
         bNormalVibration.setOnClickListener(new View.OnClickListener() {
@@ -165,7 +301,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
 
                         // this effect creates the vibration of default amplitude for 1000ms(1 sec)
-                        vibrationEffect1 = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE);
+                        vibrationEffect1 = VibrationEffect.createOneShot(1000, VibrationEffect.DEFAULT_AMPLITUDE);
 
                         // it is safe to cancel other vibrations currently taking place
                         vibrator.cancel();
@@ -177,7 +313,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 });
 
                 soundThread.start();
-                vibeThread.start();
+                //vibeThread.start();
 
             }
         });
@@ -237,22 +373,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         });
 
+
         // handle heavy click vibration button
-        bHeavyClickVibration.setOnClickListener(new View.OnClickListener() {
+        startStopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                final VibrationEffect vibrationEffect5;
-
-                // this type of vibration requires API 29
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-
-                    // create vibrator effect with the constant EFFECT_HEAVY_CLICK
-                    vibrationEffect5 = VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK);
-
-                    // it is safe to cancel other vibrations currently taking place
-                    vibrator.cancel();
-
-                    vibrator.vibrate(vibrationEffect5);
+                if (started) {
+                    started = false;
+                    startStopButton.setText("Start");
+                    recordTask.cancel(true);
+                } else {
+                    started = true;
+                    Log.e("AudioRecord", "Recording");
+                    startStopButton.setText("Stop");
+                    recordTask = new RecordAudio();
+                    recordTask.execute();
                 }
             }
         });
