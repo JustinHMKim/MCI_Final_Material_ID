@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     int audioEncoding = AudioFormat.ENCODING_PCM_16BIT;
     private RealDoubleFFT transformer;
     int blockSize = 4096;                         // deal with this many samples at a time
-    boolean started = true;
+    boolean started = false;
     public int frequency = 21000;                      // the frequency given
     Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, startStopButton;
     boolean ultraSound = false;
@@ -377,15 +377,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bTickVibration.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                File file = new File("data/data/com.example.vibetest/files/myrecording.mp3");
+                filename = file.toString();
                 if(!started){
-                    File file = new File("data/data/com.example.vibetest/files/myrecording.mp3");
-                    filename = file.toString();
-                    Toast t = Toast.makeText(getApplicationContext(), "Nope", Toast.LENGTH_SHORT);
+                    Toast t = Toast.makeText(getApplicationContext(), "Click the bottom button to play the file", Toast.LENGTH_SHORT);
                     t.show();
                     started = true;
                 }
                 else{
-                    Toast t = Toast.makeText(getApplicationContext(), "Yup", Toast.LENGTH_SHORT);
+                    Toast t = Toast.makeText(getApplicationContext(), "Click the bottom button record to file", Toast.LENGTH_SHORT);
                     t.show();
                     started = false;
                 }
@@ -409,12 +409,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     readAudioData(filename);
                 });
                 if (started) {
-                    startStopButton.setText("Start");
+                    startStopButton.setText("Play File");
                     playThread.start();
 
                 } else {
                     Log.e("AudioRecord", "Recording");
-                    startStopButton.setText("Stop");
+                    startStopButton.setText("Record");
                     recThread.start();
                 }
             }

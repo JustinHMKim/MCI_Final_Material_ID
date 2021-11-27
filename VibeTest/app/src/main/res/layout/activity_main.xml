@@ -54,7 +54,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:backgroundTint="@color/colorPrimary"
-        android:text="Begin"
+        android:text="Click Me First"
         android:textColor="@android:color/white"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -68,7 +68,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="140dp"
         android:backgroundTint="@color/colorPrimary"
-        android:text="startStopButton"
+        android:text="Click Me Second"
         android:textColor="@android:color/white"
         app:layout_constraintHorizontal_bias="0.495"
         app:layout_constraintLeft_toLeftOf="parent"
@@ -76,8 +76,10 @@
         app:layout_constraintTop_toBottomOf="@id/tickVibrationButton" />
 
 
-    <ImageView android:id="@+id/ImageView01" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" app:layout_constraintBottom_toTopOf="@+id/startStopButton"
+    <ImageView android:id="@+id/ImageView01"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toTopOf="@+id/startStopButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
     </ImageView>
