@@ -400,21 +400,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             public void onClick(View v) {
 
 
-                final Thread playThread = new Thread(() -> {
-                    startRecording();
-                    writeAudioData(filename);
-                });
-                final Thread recThread = new Thread(() -> {
-                    startPlaying();
-                    readAudioData(filename);
-                });
+
+
                 if (started) {
                     startStopButton.setText("Play File");
+                    final Thread playThread = new Thread(() -> {
+                        startPlaying();
+                        readAudioData(filename);
+                    });
                     playThread.start();
 
                 } else {
                     Log.e("AudioRecord", "Recording");
                     startStopButton.setText("Record");
+                    final Thread recThread = new Thread(() -> {
+                        startRecording();
+                        writeAudioData(filename);
+                    });
                     recThread.start();
                 }
             }
