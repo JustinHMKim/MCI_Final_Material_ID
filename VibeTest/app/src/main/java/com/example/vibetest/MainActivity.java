@@ -40,6 +40,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 
+import be.tarsos.dsp.AudioDispatcher;
+import be.tarsos.dsp.AudioEvent;
+import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.io.android.AudioDispatcherFactory;
+import be.tarsos.dsp.pitch.PitchDetectionHandler;
+import be.tarsos.dsp.pitch.PitchDetectionResult;
+import be.tarsos.dsp.pitch.PitchProcessor;
 import ca.uol.aig.fftpack.RealDoubleFFT;
 
 
@@ -48,9 +55,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     int audioEncoding = AudioFormat.ENCODING_PCM_16BIT;
     private RealDoubleFFT transformer;
     int blockSize = 4096;                         // deal with this many samples at a time
-    boolean started = false;
+    boolean startRec = false;
+    boolean startPlay = false;
     public int frequency = 21000;                      // the frequency given
-    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, startStopButton;
+    Button bNormalVibration, bClickVibration, bDoubleClickVibration, bTickVibration, startStopButton, startStopButton2;
     boolean ultraSound = false;
 
     String filename;
@@ -59,122 +67,42 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     final static int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_8BIT;
     static final int BUFFER_SIZE_RECORDING = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-    protected AudioRecord audioRecord;
+
+    private String audioFilename = null;
+    private MediaRecorder recorder = null;
+    private boolean start = false;
+
+    private void onRecord(boolean start) {
+        if (start) {
+            startRecording();
+        } else {
+            stopRecording();
+        }
+    }
+
 
     private void startRecording() {
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        audioRecord = new AudioRecord(AUDIO_SOURCE, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE_RECORDING);
-
-        if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) { // check for proper initialization
-            Log.e("TAG", "error initializing ");
-            return;
+        recorder = new MediaRecorder();
+        recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        recorder.setOutputFormat(AudioFormat.ENCODING_PCM_16BIT);
+        recorder.setOutputFile(audioFilename);
+        recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+        recorder.setAudioEncodingBitRate(160000);
+        recorder.setAudioSamplingRate(44100);
+        try {
+            recorder.prepare();
+        } catch (IOException e) {
+            Log.e("AudioRecordTest", "prepare() failed");
         }
 
-        audioRecord.startRecording();
+        recorder.start();
 
     }
 
-    private void writeAudioData(String fileName) { // to be called in a Runnable for a Thread created after call to startRecording()
-        byte[] data = new byte[BUFFER_SIZE_RECORDING/2]; // assign size so that bytes are read in in chunks inferior to AudioRecord internal buffer size
-        FileOutputStream outputStream = null;
-        try {
-            outputStream = new FileOutputStream(fileName); //fileName is path to a file, where audio data should be written
-        } catch (FileNotFoundException e) {
-// handle error
-        }
-
-        if(!started){
-            Log.d("TAG", "kill me " );
-        }
-        else{
-            Log.d("TAG", "please for the love of God " );
-        }
-        while (started) { // continueRecording can be toggled by a button press, handled by the main (UI) thread
-            int read = audioRecord.read(data, 0, data.length);
-            try {
-                outputStream.write(data, 0, read);
-            }
-            catch (IOException e) {
-                Log.d("TAG", "exception while writing to file");
-                e.printStackTrace();
-            }
-        }
-        try {
-            outputStream.flush();
-            outputStream.close();
-        }
-        catch (IOException e) {
-            Log.d("TAG", "exception while closing output stream " + e.toString());
-            e.printStackTrace();
-        }
-// Clean up
-        audioRecord.stop();
-        audioRecord.release();
-        audioRecord = null;
-    }
-
-
-    final static int CHANNEL_OUT_CONFIG = AudioFormat.CHANNEL_OUT_MONO;
-
-    static final int BUFFER_SIZE_PLAYING = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_OUT_CONFIG, AUDIO_FORMAT);
-
-    protected AudioTrack audioTrack;
-
-    private void startPlaying() {
-
-        AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH) // defines the type of content being played
-                .setUsage(AudioAttributes.USAGE_MEDIA) // defines the purpose of why audio is being played in the app
-                .build();
-
-        AudioFormat audioFormat = new AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_8BIT) // we plan on reading byte arrays of data, so use the corresponding encoding
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build();
-
-        audioTrack = new AudioTrack(audioAttributes, audioFormat, BUFFER_SIZE_PLAYING, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
-
-    }
-
-    private void readAudioData(String fileName) { // fileName is the path to the file where the audio data is located
-        byte[] data = new byte[BUFFER_SIZE_PLAYING/2]; // small buffer size to not overflow AudioTrack's internal buffer
-        FileInputStream fileInputStream = null;
-        try {
-            fileInputStream = new FileInputStream(new File(fileName));
-        }
-        catch (IOException e) {
-// handle exception
-        }
-        int i = 0;
-        while (i != -1) { // run until file ends
-            try {
-                i = fileInputStream.read(data);
-                audioTrack.write(data, 0, i);
-            }
-            catch (IOException e) {
-// handle exception
-            }
-        }
-        try {
-            fileInputStream.close();
-        }
-        catch (IOException e) {
-// handle exception
-        }
-        audioTrack.stop();
-        audioTrack.release();
-        audioTrack = null;
+    private void stopRecording() {
+        recorder.stop();
+        recorder.release();
+        recorder = null;
     }
 
     private SensorManager sensorManager;
@@ -196,8 +124,37 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private final double[] sample = new double[numSamples];
 
     private final byte[] generatedSnd = new byte[2 * numSamples];
+    private String [] permissions = {Manifest.permission.RECORD_AUDIO};
 
     // construct AudioRecord to record audio from microphone with sample rate of 44100Hz
+
+    void connectsAudioDispatchertoMicrophone() {
+        //final String[] hrtz = {""};
+        AudioDispatcher dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 0);
+
+        PitchDetectionHandler pdh = new PitchDetectionHandler() {
+            @Override
+            public void handlePitch(final PitchDetectionResult result, AudioEvent e) {
+                final float pitchInHz = result.getPitch();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (pitchInHz > 1000)
+                            Log.d("TAG", "pitchInHz: " + pitchInHz);
+                            //hrtz[0] = Float.toString(pitchInHz);
+                    }
+                });
+            }
+        };
+        AudioProcessor p = new PitchProcessor(PitchProcessor.PitchEstimationAlgorithm.FFT_YIN,
+                44100,
+                4096,
+                pdh);
+        dispatcher.addAudioProcessor(p);
+
+        Thread thread = new Thread(dispatcher, "Audio Dispatcher");
+        thread.start();
+    }
 
 
     void genTone() {
@@ -234,6 +191,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onSensorChanged(SensorEvent event) {
+
         if(startTime == null){
             startTime = event.timestamp;
         }
@@ -286,7 +244,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
         transformer = new RealDoubleFFT(blockSize);
 
-
+        ActivityCompat.requestPermissions(this, permissions, 200);
+        audioFilename = "data/data/com.example.vibetest/files/myrecording.wav";
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -303,8 +262,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bDoubleClickVibration = findViewById(R.id.doubleClickVibrationButton);
         bTickVibration = findViewById(R.id.tickVibrationButton);
         startStopButton = findViewById(R.id.startStopButton);
+        startStopButton2 = findViewById(R.id.startStopButton2);
 
-        // handle normal vibration button
+        // Makes sound
         bNormalVibration.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -338,16 +298,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         });
 
-        // handle click vibration button
+        // Records audio
         bClickVibration.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
-                StringBuilder sb = new StringBuilder();
-
-                sb.append("vibecheck.csv");
-
-                File to = new File(getFilesDir(), sb.toString());
+                connectsAudioDispatchertoMicrophone();
 
             }
         });
@@ -360,16 +316,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 final VibrationEffect vibrationEffect3;
 
                 // this type of vibration requires API 29
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-
-                    // create vibrator effect with the constant EFFECT_DOUBLE_CLICK
-                    vibrationEffect3 = VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK);
-
-                    // it is safe to cancel other vibrations currently taking place
-                    vibrator.cancel();
-
-                    vibrator.vibrate(vibrationEffect3);
+                File file = new File("data/data/com.example.vibetest/files/myrecording.wav");
+                try {
+                    file.createNewFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
+                filename = file.toString();
             }
         });
 
@@ -377,17 +330,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bTickVibration.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                File file = new File("data/data/com.example.vibetest/files/myrecording.mp3");
-                filename = file.toString();
-                if(!started){
-                    Toast t = Toast.makeText(getApplicationContext(), "Click the bottom button to play the file", Toast.LENGTH_SHORT);
+
+                if(startRec){
+                    Toast t = Toast.makeText(getApplicationContext(), "Stop Rec", Toast.LENGTH_SHORT);
                     t.show();
-                    started = true;
+                    startRec = false;
                 }
                 else{
-                    Toast t = Toast.makeText(getApplicationContext(), "Click the bottom button record to file", Toast.LENGTH_SHORT);
+                    Toast t = Toast.makeText(getApplicationContext(), "Stop Play", Toast.LENGTH_SHORT);
                     t.show();
-                    started = false;
+                    startPlay = false;
                 }
             }
         });
@@ -398,12 +350,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
 
             public void onClick(View v) {
-
-
-
-
-                if (started) {
-                    startStopButton.setText("Play File");
+                startRec = true;
+                /*
+                if (startPlay) {
+                    startStopButton.setText("Playing File");
                     final Thread playThread = new Thread(() -> {
                         startPlaying();
                         readAudioData(filename);
@@ -411,13 +361,32 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     playThread.start();
 
                 } else {
+                    startStopButton.setText("Can Start Playing File");
+                    startPlay = true;
+                }
+                */
+
+            }
+        });
+        startStopButton2.setOnClickListener(new View.OnClickListener() {
+            @Override
+
+            public void onClick(View v) {
+
+
+                if (startRec) {
                     Log.e("AudioRecord", "Recording");
-                    startStopButton.setText("Record");
+                    startStopButton2.setText("Record");
                     final Thread recThread = new Thread(() -> {
-                        startRecording();
-                        writeAudioData(filename);
+                        onRecord(true);
                     });
+                    startRec = false;
                     recThread.start();
+
+                } else {
+                    startStopButton2.setText("Can Start Record");
+                    onRecord(false);
+                    startRec = true;
                 }
             }
         });
