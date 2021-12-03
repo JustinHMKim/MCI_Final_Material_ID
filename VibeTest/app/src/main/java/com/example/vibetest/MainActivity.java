@@ -66,7 +66,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_8BIT;
   static final int BUFFER_SIZE_RECORDING = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
 
-  private String audioFilename = null;
+  private String audioFilename = "data/data/com.example.vibetest/files/myrecording.wav";
   private MediaRecorder recorder = null;
   private boolean start = false;
   // ---------------------------------------
@@ -85,10 +85,33 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   Button bNormalVibration, bTickVibration, bHeavyClickVibration, bStopRanging;
   Button bReceiverStartRanging, bReceiverStopRanging;
   Button bPlaySound, bStartRecording;
+  Button bStartSoundRanging, bStopSoundRanging;
+  Button bReceiverStartSoundRanging, bReceiverStopSoundRanging;
 
   TextView transmitterData;
 
+
+  /**
+   * variables for tarnsimitter sound ranging
+   */
+  private boolean startSoundRanging = false;
+//  private boolean startRecording = false;
+
+//  private Long rangingStartTime = null;
+//  private Long t4 = null;
+//  private Long t5 = null;
+//  private Long currTime = null;
+
+//  private boolean signalReceived = false;
+//  private Boolean prevSignalReceived = null;
+//  private boolean firstTime = true;
+//  private boolean transmitterStopRecording = false;
+
+  /**
+   * variables for transmitter vibration ranging
+   */
   private boolean startRanging = false;
+  // t1
   private Long rangingStartTime = null;
   private Long t4 = null;
   private Long t5 = null;
@@ -100,7 +123,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   private boolean transmitterStopRecording = false;
 
 
-  private final int duration = 5; // seconds
+  private final int duration = 2; // seconds
   // private final int sampleRate = 21000;
   private final int sampleRate = 192000;
   private final int numSamples = duration * sampleRate;
@@ -108,7 +131,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
   private final byte[] generatedSnd = new byte[2 * numSamples];
   private String [] permissions = {Manifest.permission.RECORD_AUDIO};
-
 
   private void onRecord(boolean start) {
     if (start) {
@@ -145,18 +167,71 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   // construct AudioRecord to record audio from microphone with sample rate of 44100Hz
 
   void connectsAudioDispatchertoMicrophone() {
-    //final String[] hrtz = {""};
     AudioDispatcher dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 0);
 
     PitchDetectionHandler pdh = new PitchDetectionHandler() {
       @Override
       public void handlePitch(final PitchDetectionResult result, AudioEvent e) {
         final float pitchInHz = result.getPitch();
+        if (startSoundRanging && !transmitterStopRecording) {
+            if (pitchInHz >= 14000) {
+              signalReceived = true;
+              prevSignalReceived = true;
+              if (firstTime) {
+                firstTime = false;
+                t4 = System.nanoTime();
+                //final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+                final Thread soundThread = new Thread(() -> {
+                  genTone();
+                  handler.post(() -> playSound());
+                });
+                try {
+                  Thread.sleep(5000);
+                } catch (InterruptedException interruptedException) {
+                  interruptedException.printStackTrace();
+                }
+                transmitterStopRecording = true;
+                t5 = System.nanoTime(); // t5 = t4 + 5s
+                soundThread.start();
+              }
+            }
+        }
+
+//        Log.d("recording", String.valueOf(receiverStopSoundRecording));
+        if (receiverStartSoundRanging && !receiverStopSoundRecording) {
+            if (pitchInHz >= 14000) {
+              if (receiverFirstTime) {
+                receiverFirstTime = false;
+                t2 = System.nanoTime();
+
+                final Thread soundThread = new Thread(() -> {
+                  genTone();
+                  handler.post(() -> playSound());
+                });
+                receiverStopSoundRecording = true;
+                try {
+                  Thread.sleep(5000);
+                } catch (InterruptedException interruptedException) {
+                  interruptedException.printStackTrace();
+                }
+                Log.d("FIRST", String.valueOf(System.nanoTime()));
+                t3 = System.nanoTime(); // t3 = t2 + 5 * 10^9
+                soundThread.start();
+              } else if (receiverSecondTime && !receiverStopSoundRecording) {
+                receiverSecondTime = false;
+                Log.d("SECOND", String.valueOf(System.nanoTime()));
+                t6 = System.nanoTime();
+              }
+            }
+
+        }
+
         runOnUiThread(new Runnable() {
           @Override
           public void run() {
-            if (pitchInHz > 1000)
-              Log.d("TAG", "pitchInHz: " + pitchInHz);
+//            if (pitchInHz > 1000 && !transmitterStopRecording)
+//              Log.d("TAG", "pitchInHz: " + pitchInHz);
             //hrtz[0] = Float.toString(pitchInHz);
           }
         });
@@ -176,7 +251,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     // fill out the array
     for (int i = 0; i < numSamples; ++i) {
       // hz
-      double freqOfTone = 15000;
+      double freqOfTone = 14000;
       sample[i] = Math.sin(2 * Math.PI * i / (sampleRate / freqOfTone));
     }
 
@@ -194,14 +269,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   }
 
   void playSound() {
+    transmitterStopRecording = true;
+    receiverStopSoundRecording = true;
     final AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, AudioFormat.CHANNEL_OUT_MONO,
         AudioFormat.ENCODING_PCM_16BIT, generatedSnd.length, AudioTrack.MODE_STATIC);
     audioTrack.write(generatedSnd, 0, generatedSnd.length);
     audioTrack.play();
+    try {
+      Thread.sleep(3000);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    transmitterStopRecording = false;
+    receiverStopSoundRecording = false;
   }
 
   Handler handler = new Handler();
 
+  private boolean receiverStartSoundRanging = false;
+  private boolean receiverStopSoundRecording = false;
+//  private Long receiverRangingStartTime = null;
+//  private Long t2 = null;
+//  private Long t3 = null;
+//  private Long t6 = null;
+//  private Long receiverStopRecording = null;
+//
+//  private boolean receiverSignalReceived = false;
+//  private Boolean prevReceiverSignalReceived = null;
+//  private boolean receiverFirstTime = true;
+//  private boolean receiverSecondTime = true;
+
+  /**
+   * variables for receiver vibration ranging
+   */
   private boolean receiverStartRanging = false;
   private Long receiverRangingStartTime = null;
   private Long t2 = null;
@@ -383,7 +483,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     transformer = new RealDoubleFFT(blockSize);
     ActivityCompat.requestPermissions(this, permissions, 200);
-    audioFilename = "data/data/com.example.vibetest/files/myrecording.wav";
 
     sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
     accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -404,9 +503,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     bReceiverStopRanging = findViewById(R.id.receiverStopRangingButton);
     bPlaySound = findViewById(R.id.playSoundButton);
     bStartRecording = findViewById(R.id.startRecordButton);
+    bStartSoundRanging = findViewById(R.id.startSoundRangingButton);
+    bStopSoundRanging = findViewById(R.id.stopSoundRangingButton);
+    bReceiverStartSoundRanging = findViewById(R.id.receiverStartSoundRangingButton);
+    bReceiverStopSoundRanging = findViewById(R.id.receiverStopSoundRangingButton);
 
     transmitterData = findViewById(R.id.transmitterData);
 
+    // Receiver Start Ranging
     bReceiverStartRanging.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View view) {
@@ -424,6 +528,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       }
     });
 
+    // Receiver Stop Ranging
     bReceiverStopRanging.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View view) {
@@ -453,45 +558,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       }
     });
 
-    // makes sound
-    bPlaySound.setOnClickListener(new View.OnClickListener() {
-      @Override
-      public void onClick(View view) {
-        // this is the only type of the vibration which requires system version Oreo (API 26)
-        final Thread soundThread = new Thread(() -> {
-          genTone();
-          handler.post(() -> playSound());
-        });
-        soundThread.start();
-      }
-    });
-
-    // records audio
-    // + creates file
-    // + startRec set to true
-    bStartRecording.setOnClickListener(new View.OnClickListener() {
-      @Override
-      public void onClick(View view) {
-        File file = new File("data/data/com.example.vibetest/files/myrecording.wav");
-        try {
-          file.createNewFile();
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-        filename = file.toString();
-        
-        startRec = true;
-        connectsAudioDispatchertoMicrophone();
-      }
-    });
-
-    // handle normal vibration button
+    // Transmitter Start Ranging
     bNormalVibration.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View v) {
         if (startRanging) {
           Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging has already started!",
-              Toast.LENGTH_SHORT);
+                  Toast.LENGTH_SHORT);
           invalidClick.show();
           return;
         }
@@ -514,11 +587,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
 
         rangingStartTime = System.nanoTime();
-        // soundThread.start();
         vibeThread.start();
       }
     });
 
+    // Transmitter Stop Ranging
     bStopRanging.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View v) {
@@ -545,6 +618,158 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         prevReceiverSignalReceived = null;
         firstTime = true;
         transmitterStopRecording = false;
+      }
+    });
+
+    bReceiverStartSoundRanging.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        if (startSoundRanging || receiverStartSoundRanging) {
+          String text = startRanging ? "You are the transmitter" : "Ranging has already started";
+          Toast invalidClick = Toast.makeText(getApplicationContext(), text, Toast.LENGTH_SHORT);
+          invalidClick.show();
+          return;
+        }
+
+        File f = new File(audioFilename);
+        try {
+          f.createNewFile();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+
+        receiverStartSoundRanging = true;
+        receiverStopSoundRecording = false;
+
+        connectsAudioDispatchertoMicrophone();
+
+        receiverRangingStartTime = System.nanoTime();
+      }
+    });
+
+    bReceiverStopSoundRanging.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        if (!receiverStartSoundRanging) {
+          Toast invalidClick = Toast.makeText(getApplicationContext(), "Sound ranging hasn't started.", Toast.LENGTH_SHORT);
+          invalidClick.show();
+          return;
+        }
+
+        double Db = ((double) t3 - t2) / 1000000000;
+        double Rb = ((double) t6 - t3) / 1000000000;
+        StringBuilder sb = new StringBuilder();
+        sb.append("Db: " + Db + "\n");
+        sb.append("Rb: " + Rb);
+        transmitterData.setText(sb.toString());
+
+
+        receiverStopSoundRecording = false;
+        receiverStartSoundRanging = false;
+        receiverRangingStartTime = null;
+        t2 = null;
+        t3 = null;
+        t6 = null;
+        receiverStopRecording = null;
+        receiverSignalReceived = false;
+        receiverFirstTime = true;
+        receiverSecondTime = true;
+      }
+    });
+
+    bStartSoundRanging.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        if (startSoundRanging) {
+          Toast invalidClick = Toast.makeText(getApplicationContext(), "Sound Ranging has already started!",
+                  Toast.LENGTH_SHORT);
+          invalidClick.show();
+          return;
+        }
+
+        File f = new File(audioFilename);
+        try {
+          f.createNewFile();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        startSoundRanging = true;
+//        startRecording = true;
+
+        transmitterStopRecording = true;
+        connectsAudioDispatchertoMicrophone();
+
+        // makes sound
+        final Thread soundThread = new Thread(() -> {
+          genTone();
+          handler.post(() -> playSound());
+        });
+
+        rangingStartTime = System.nanoTime();
+//        Log.d("Start time:", String.valueOf(rangingStartTime));
+        soundThread.start();
+      }
+    });
+
+    bStopSoundRanging.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        if (!startSoundRanging) {
+          Toast invalidClick = Toast.makeText(getApplicationContext(), "Sound ranging hasn't started.", Toast.LENGTH_SHORT);
+          invalidClick.show();
+          return;
+        }
+
+        double Ra = ((double) t4 - rangingStartTime) / 1000000000;
+        double Da = ((double) t5 - t4) / 1000000000;
+        StringBuilder sb = new StringBuilder();
+        sb.append("Ra: " + Ra + "\n");
+        sb.append("Da: " + Da);
+        transmitterData.setText(sb.toString());
+
+        startSoundRanging = false;
+        rangingStartTime = null;
+        t4 = null;
+        t5 = null;
+        currTime = null;
+        signalReceived = false;
+        prevReceiverSignalReceived = null;
+        firstTime = true;
+        transmitterStopRecording = false;
+      }
+    });
+
+    // makes sound
+    bPlaySound.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        // this is the only type of the vibration which requires system version Oreo (API 26)
+        transmitterStopRecording = true;
+        final Thread soundThread = new Thread(() -> {
+          genTone();
+          handler.post(() -> playSound());
+        });
+        soundThread.start();
+        transmitterStopRecording = false;
+      }
+    });
+
+    // records audio
+    // + creates file
+    // + startRec set to true
+    bStartRecording.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        File file = new File("data/data/com.example.vibetest/files/myrecording.wav");
+        try {
+          file.createNewFile();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        filename = file.toString();
+        
+        startRec = true;
+        connectsAudioDispatchertoMicrophone();
       }
     });
 
@@ -579,7 +804,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
           // it is safe to cancel other vibrations currently taking place
           vibrator.cancel();
-
           vibrator.vibrate(vibrationEffect5);
         }
       }
