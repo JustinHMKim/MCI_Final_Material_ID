@@ -27,18 +27,9 @@ import java.util.List;
 
 import androidx.core.app.ActivityCompat;
 import android.Manifest;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.media.AudioAttributes;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
-import android.os.AsyncTask;
 import android.util.Log;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -47,13 +38,11 @@ import be.tarsos.dsp.io.android.AudioDispatcherFactory;
 import be.tarsos.dsp.pitch.PitchDetectionHandler;
 import be.tarsos.dsp.pitch.PitchDetectionResult;
 import be.tarsos.dsp.pitch.PitchProcessor;
-import ca.uol.aig.fftpack.RealDoubleFFT;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
   int channelConfiguration = AudioFormat.CHANNEL_CONFIGURATION_MONO;
   int audioEncoding = AudioFormat.ENCODING_PCM_16BIT;
-  private RealDoubleFFT transformer;
   int blockSize = 4096;                         // deal with this many samples at a time
   boolean startRec = false;
   boolean startPlay = false;
@@ -68,14 +57,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
   private String audioFilename = "data/data/com.example.vibetest/files/myrecording.wav";
   private MediaRecorder recorder = null;
-  private boolean start = false;
   // ---------------------------------------
 
   private SensorManager sensorManager;
   private Sensor accel;
-  // private Sensor gyro;
-  // private Long startTime;
-  // private Long curTime;
   float[] accelerometer_data = new float[3];
   float[] gravity = new float[3];
   String filename = "transmitter_data.csv";
@@ -92,14 +77,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
   /**
-   * variables for tarnsimitter sound ranging
+   * variables for transmitter sound ranging
    */
   private boolean startSoundRanging = false;
-//  private boolean startRecording = false;
-
+  private Long st4 = null;
+  private Long st5 = null;
 //  private Long rangingStartTime = null;
-//  private Long t4 = null;
-//  private Long t5 = null;
 //  private Long currTime = null;
 
 //  private boolean signalReceived = false;
@@ -113,18 +96,49 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   private boolean startRanging = false;
   // t1
   private Long rangingStartTime = null;
-  private Long t4 = null;
-  private Long t5 = null;
+  private Long vt4 = null;
+  private Long vt5 = null;
   private Long currTime = null;
 
   private boolean signalReceived = false;
   private Boolean prevSignalReceived = null;
-  private boolean firstTime = true;
   private boolean transmitterStopRecording = false;
+  private int vTransIter = 0;
+  private int sTransIter = 0;
+  /**
+   * variables for receiver sound ranging
+   */
+  private boolean receiverStartSoundRanging = false;
+  private boolean receiverStopSoundRecording = false;
+//  private Long receiverRangingStartTime = null;
+//  private Long receiverStopRecording = null;
+//
+//  private boolean receiverSignalReceived = false;
+//  private Boolean prevReceiverSignalReceived = null;
+//  private boolean receiverFirstTime = true;
+//  private boolean receiverSecondTime = true;
+  private Long st2 = null;
+  private Long st3 = null;
+  private Long st6 = null;
+  /**
+   * variables for receiver vibration ranging
+   */
+  private boolean receiverStartRanging = false;
+  private Long receiverRangingStartTime = null;
+  private Long vt2 = null;
+  private Long vt3 = null;
+  private Long vt6 = null;
+  boolean finished = false;
+  private Long receiverStopRecording = null;
 
-
+  private boolean receiverSignalReceived = false;
+  private Boolean prevReceiverSignalReceived = null;
+  private int vReceiverIter = 0;
+  private int sReceiverIter = 0;
+  /**
+   * variables for sound generation and recording
+   */
   private final int duration = 2; // seconds
-  // private final int sampleRate = 21000;
   private final int sampleRate = 192000;
   private final int numSamples = duration * sampleRate;
   private final double[] sample = new double[numSamples];
@@ -132,6 +146,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
   private final byte[] generatedSnd = new byte[2 * numSamples];
   private String [] permissions = {Manifest.permission.RECORD_AUDIO};
 
+
+  /**
+   * Helper Functions for sound recording and generation
+   */
   private void onRecord(boolean start) {
     if (start) {
       startRecording();
@@ -140,6 +158,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
   }
 
+  // Records Audio
   private void startRecording() {
     recorder = new MediaRecorder();
     recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -164,88 +183,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     recorder = null;
   }
 
-  // construct AudioRecord to record audio from microphone with sample rate of 44100Hz
-
-  void connectsAudioDispatchertoMicrophone() {
-    AudioDispatcher dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 0);
-
-    PitchDetectionHandler pdh = new PitchDetectionHandler() {
-      @Override
-      public void handlePitch(final PitchDetectionResult result, AudioEvent e) {
-        final float pitchInHz = result.getPitch();
-        if (startSoundRanging && !transmitterStopRecording) {
-            if (pitchInHz >= 14000) {
-              signalReceived = true;
-              prevSignalReceived = true;
-              if (firstTime) {
-                firstTime = false;
-                t4 = System.nanoTime();
-                //final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-
-                final Thread soundThread = new Thread(() -> {
-                  genTone();
-                  handler.post(() -> playSound());
-                });
-                try {
-                  Thread.sleep(5000);
-                } catch (InterruptedException interruptedException) {
-                  interruptedException.printStackTrace();
-                }
-                transmitterStopRecording = true;
-                t5 = System.nanoTime(); // t5 = t4 + 5s
-                soundThread.start();
-              }
-            }
-        }
-
-//        Log.d("recording", String.valueOf(receiverStopSoundRecording));
-        if (receiverStartSoundRanging && !receiverStopSoundRecording) {
-            if (pitchInHz >= 14000) {
-              if (receiverFirstTime) {
-                receiverFirstTime = false;
-                t2 = System.nanoTime();
-
-                final Thread soundThread = new Thread(() -> {
-                  genTone();
-                  handler.post(() -> playSound());
-                });
-                receiverStopSoundRecording = true;
-                try {
-                  Thread.sleep(5000);
-                } catch (InterruptedException interruptedException) {
-                  interruptedException.printStackTrace();
-                }
-                Log.d("FIRST", String.valueOf(System.nanoTime()));
-                t3 = System.nanoTime(); // t3 = t2 + 5 * 10^9
-                soundThread.start();
-              } else if (receiverSecondTime && !receiverStopSoundRecording) {
-                receiverSecondTime = false;
-                Log.d("SECOND", String.valueOf(System.nanoTime()));
-                t6 = System.nanoTime();
-              }
-            }
-
-        }
-
-        runOnUiThread(new Runnable() {
-          @Override
-          public void run() {
-//            if (pitchInHz > 1000 && !transmitterStopRecording)
-//              Log.d("TAG", "pitchInHz: " + pitchInHz);
-            //hrtz[0] = Float.toString(pitchInHz);
-          }
-        });
-      }
-    };
-    AudioProcessor p = new PitchProcessor(PitchProcessor.PitchEstimationAlgorithm.FFT_YIN,
-            44100,
-            4096,
-            pdh);
-    dispatcher.addAudioProcessor(p);
-
-    Thread thread = new Thread(dispatcher, "Audio Dispatcher");
-    thread.start();
-  }
 
   void genTone() {
     // fill out the array
@@ -272,7 +209,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     transmitterStopRecording = true;
     receiverStopSoundRecording = true;
     final AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, AudioFormat.CHANNEL_OUT_MONO,
-        AudioFormat.ENCODING_PCM_16BIT, generatedSnd.length, AudioTrack.MODE_STATIC);
+            AudioFormat.ENCODING_PCM_16BIT, generatedSnd.length, AudioTrack.MODE_STATIC);
     audioTrack.write(generatedSnd, 0, generatedSnd.length);
     audioTrack.play();
     try {
@@ -284,36 +221,94 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     receiverStopSoundRecording = false;
   }
 
+
+
+  // construct AudioRecord to record audio from microphone with sample rate of 44100Hz
+  // Detects Audio frequency, does ranging
+  void connectsAudioDispatchertoMicrophone() {
+    AudioDispatcher dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(44100, 4096, 0);
+
+    PitchDetectionHandler pdh = new PitchDetectionHandler() {
+      @Override
+      public void handlePitch(final PitchDetectionResult result, AudioEvent e) {
+        final float pitchInHz = result.getPitch();
+        if (startSoundRanging && !transmitterStopRecording) {
+            if (pitchInHz >= 14000) {
+              signalReceived = true;
+              prevSignalReceived = true;
+              if (sTransIter == 0) {
+                sTransIter++;
+                st4 = System.nanoTime();
+                //final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+                final Thread soundThread = new Thread(() -> {
+                  genTone();
+                  handler.post(() -> playSound());
+                });
+                try {
+                  Thread.sleep(5000);
+                } catch (InterruptedException interruptedException) {
+                  interruptedException.printStackTrace();
+                }
+                transmitterStopRecording = true;
+                st5 = System.nanoTime(); // t5 = t4 + 5s
+                soundThread.start();
+              }
+            }
+        }
+
+//        Log.d("recording", String.valueOf(receiverStopSoundRecording));
+        if (receiverStartSoundRanging && !receiverStopSoundRecording) {
+            if (pitchInHz >= 14000) {
+              if (sReceiverIter == 0) {
+                sReceiverIter++;
+                st2 = System.nanoTime();
+
+                final Thread soundThread = new Thread(() -> {
+                  genTone();
+                  handler.post(() -> playSound());
+                });
+                receiverStopSoundRecording = true;
+                try {
+                  Thread.sleep(5000);
+                } catch (InterruptedException interruptedException) {
+                  interruptedException.printStackTrace();
+                }
+                Log.d("FIRST", String.valueOf(System.nanoTime()));
+                st3 = System.nanoTime(); // t3 = t2 + 5 * 10^9
+                soundThread.start();
+              } else if (sReceiverIter == 1 && !receiverStopSoundRecording) {
+                sReceiverIter++;
+                Log.d("SECOND", String.valueOf(System.nanoTime()));
+                st6 = System.nanoTime();
+              }
+            }
+
+        }
+
+        runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+//            if (pitchInHz > 1000 && !transmitterStopRecording)
+//              Log.d("TAG", "pitchInHz: " + pitchInHz);
+            //hrtz[0] = Float.toString(pitchInHz);
+          }
+        });
+      }
+    };
+    AudioProcessor p = new PitchProcessor(PitchProcessor.PitchEstimationAlgorithm.FFT_YIN,
+            44100,
+            4096,
+            pdh);
+    dispatcher.addAudioProcessor(p);
+
+    Thread thread = new Thread(dispatcher, "Audio Dispatcher");
+    thread.start();
+  }
+
+
   Handler handler = new Handler();
 
-  private boolean receiverStartSoundRanging = false;
-  private boolean receiverStopSoundRecording = false;
-//  private Long receiverRangingStartTime = null;
-//  private Long t2 = null;
-//  private Long t3 = null;
-//  private Long t6 = null;
-//  private Long receiverStopRecording = null;
-//
-//  private boolean receiverSignalReceived = false;
-//  private Boolean prevReceiverSignalReceived = null;
-//  private boolean receiverFirstTime = true;
-//  private boolean receiverSecondTime = true;
-
-  /**
-   * variables for receiver vibration ranging
-   */
-  private boolean receiverStartRanging = false;
-  private Long receiverRangingStartTime = null;
-  private Long t2 = null;
-  private Long t3 = null;
-  private Long t6 = null;
-
-  private Long receiverStopRecording = null;
-
-  private boolean receiverSignalReceived = false;
-  private Boolean prevReceiverSignalReceived = null;
-  private boolean receiverFirstTime = true;
-  private boolean receiverSecondTime = true;
 
   @Override
   public void onSensorChanged(SensorEvent event) {
@@ -327,21 +322,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       case Sensor.TYPE_ACCELEROMETER:
         // Isolate the force of gravity with the low-pass filter.
         final float alpha = 0.8f;
+
         gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
         accelerometer_data[2] = event.values[2] - gravity[2];
 
         if (receiverStopRecording == null || System.nanoTime() - receiverStopRecording < 5 * 1000000000) {
-          if (Math.abs(accelerometer_data[2]) > 0.13) {
+          if (Math.abs(accelerometer_data[2]) > 0.13 ) {
             receiverSignalReceived = true;
             prevReceiverSignalReceived = true;
-            if (receiverFirstTime) {
-              receiverFirstTime = false;
-              t2 = System.nanoTime();
+            Log.d("vReceiverIter", vReceiverIter + "");
+            if (vReceiverIter == 0) {
+              vReceiverIter++;
+              Log.d("vReceiverIter", vReceiverIter + "when it should be 0");
+              vt2 = System.nanoTime();
               final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
               new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
                   final Thread vibeThread = new Thread(() -> {
+
+                    vt3 = System.nanoTime(); // t3 = t2 + 5 * 10^9
+                    Log.d("vt3", vt3 +" ");
                     final VibrationEffect vibrationEffect1;
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                       // this effect creates the vibration of default amplitude for 1000ms(1 sec)
@@ -353,14 +354,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                       ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(1500);
                     }
                   });
-                  t3 = System.nanoTime(); // t3 = t2 + 5 * 10^9
+
                   receiverStopRecording = System.nanoTime();
                   vibeThread.start();
+                  finished = true;
                 }
               }, 5000);
-            } else if (receiverSecondTime) {
-              receiverSecondTime = false;
-              t6 = System.nanoTime();
+            } else if (finished) {
+              vReceiverIter++;
+              vt6 = System.nanoTime();
+              Log.d("vt6", vt6 +" ");
             }
           } else {
             if (prevReceiverSignalReceived == null || !prevReceiverSignalReceived) {
@@ -396,6 +399,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       switch (event.sensor.getType()) {
       case Sensor.TYPE_ACCELEROMETER:
         final float alpha = 0.8f;
+
         // Isolate the force of gravity with the low-pass filter.
         // gravity[0] = alpha * gravity[0] + (1 - alpha) * event.values[0];
         // gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
@@ -406,12 +410,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accelerometer_data[2] = event.values[2] - gravity[2];
 
         if (System.nanoTime() - rangingStartTime > 5 * 1000000000 && !transmitterStopRecording) {
-          if (Math.abs(accelerometer_data[2]) > 0.13) {
+          if (Math.abs(accelerometer_data[2]) > 0.13 && Math.abs(accelerometer_data[2]) < 0.135) {
+            Log.d("Argh", accelerometer_data[2] + " ");
             signalReceived = true;
             prevSignalReceived = true;
-            if (firstTime) {
-              firstTime = false;
-              t4 = System.nanoTime();
+            if (vTransIter == 0 ) {
+              vTransIter++;
+
+              vt4 = System.nanoTime();
+              Log.d("T4", vt4 + " ");
               final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
               new Handler().postDelayed(new Runnable() {
                 @Override
@@ -429,7 +436,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
                   });
                   transmitterStopRecording = true;
-                  t5 = System.nanoTime(); // t5 = t4 + 5s
+                  vt5 = System.nanoTime(); // t5 = t4 + 5s
                   vibeThread.start();
                 }
               }, 5000);
@@ -481,7 +488,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
 
-    transformer = new RealDoubleFFT(blockSize);
     ActivityCompat.requestPermissions(this, permissions, 200);
 
     sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -497,7 +503,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     // register all of the buttons with their IDs
     bNormalVibration = findViewById(R.id.normalVibrationButton);
     bTickVibration = findViewById(R.id.tickVibrationButton);
-    bHeavyClickVibration = findViewById(R.id.heavyClickVibrationButton);
     bStopRanging = findViewById(R.id.stopRangingButton);
     bReceiverStartRanging = findViewById(R.id.receiverStartRangingButton);
     bReceiverStopRanging = findViewById(R.id.receiverStopRangingButton);
@@ -533,14 +538,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       @Override
       public void onClick(View view) {
         if (!receiverStartRanging) {
-          Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging hasn't started.", Toast.LENGTH_SHORT);
+          Toast invalidClick = Toast.makeText(getApplicationContext(), "Vibration ranging hasn't started.", Toast.LENGTH_SHORT);
           invalidClick.show();
           return;
         }
 
 
-        double Db = ((double)t3 - t2) / 1000000000;
-        double Rb = ((double)t6 - t3) / 1000000000;
+        double Db = ((double)vt3 - vt2) / 1000000000;
+        double Rb = ((double)vt6 - vt3) / 1000000000;
         StringBuilder sb = new StringBuilder();
         sb.append("Db: " + Db + "\n");
         sb.append("Rb: " + Rb);
@@ -548,13 +553,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         receiverStartRanging = false;
         receiverRangingStartTime = null;
-        t2 = null;
-        t3 = null;
-        t6 = null;
+        vt2 = null;
+        vt3 = null;
+        vt6 = null;
         receiverStopRecording = null;
         receiverSignalReceived = false;
-        receiverFirstTime = true;
-        receiverSecondTime = true;
+        vReceiverIter = 0;
       }
     });
 
@@ -562,6 +566,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     bNormalVibration.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View v) {
+        rangingStartTime = System.nanoTime();
         if (startRanging) {
           Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging has already started!",
                   Toast.LENGTH_SHORT);
@@ -577,17 +582,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
           final VibrationEffect vibrationEffect1;
           if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             // this effect creates the vibration of default amplitude for 1000ms(1 sec)
-            vibrationEffect1 = VibrationEffect.createOneShot(1500, VibrationEffect.DEFAULT_AMPLITUDE);
+            vibrationEffect1 = VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE);
             // it is safe to cancel other vibrations currently taking place
             vibrator.cancel();
             vibrator.vibrate(vibrationEffect1);
           } else {
-            ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(1500);
+            ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(500);
           }
         });
 
-        rangingStartTime = System.nanoTime();
+
+        Log.d("T1", rangingStartTime + " ");
         vibeThread.start();
+
       }
     });
 
@@ -596,13 +603,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       @Override
       public void onClick(View v) {
         if (!startRanging) {
-          Toast invalidClick = Toast.makeText(getApplicationContext(), "Ranging hasn't started.", Toast.LENGTH_SHORT);
+          Toast invalidClick = Toast.makeText(getApplicationContext(), "Vibration ranging hasn't started.", Toast.LENGTH_SHORT);
           invalidClick.show();
           return;
         }
 
-        double Ra = ((double)t4 - rangingStartTime) / 1000000000;
-        double Da = ((double)t5 - t4) / 1000000000;
+        double Ra = ((double)vt4 - rangingStartTime) / 1000000000;
+        double Da = ((double)vt5 - vt4) / 1000000000;
         StringBuilder sb = new StringBuilder();
         sb.append("Ra: " + Ra + "\n");
         sb.append("Da: " + Da);
@@ -611,12 +618,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         startRanging = false;
         // t1
         rangingStartTime = null;
-        t4 = null;
-        t5 = null;
+        vt4 = null;
+        vt5 = null;
         currTime = null;
         signalReceived = false;
         prevReceiverSignalReceived = null;
-        firstTime = true;
+        vTransIter = 0;
         transmitterStopRecording = false;
       }
     });
@@ -656,8 +663,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
           return;
         }
 
-        double Db = ((double) t3 - t2) / 1000000000;
-        double Rb = ((double) t6 - t3) / 1000000000;
+        double Db = ((double) st3 - st2) / 1000000000;
+        double Rb = ((double) st6 - st3) / 1000000000;
         StringBuilder sb = new StringBuilder();
         sb.append("Db: " + Db + "\n");
         sb.append("Rb: " + Rb);
@@ -667,13 +674,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         receiverStopSoundRecording = false;
         receiverStartSoundRanging = false;
         receiverRangingStartTime = null;
-        t2 = null;
-        t3 = null;
-        t6 = null;
+        st2 = null;
+        st3 = null;
+        st6 = null;
         receiverStopRecording = null;
         receiverSignalReceived = false;
-        receiverFirstTime = true;
-        receiverSecondTime = true;
+        sReceiverIter = 0;
       }
     });
 
@@ -720,8 +726,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
           return;
         }
 
-        double Ra = ((double) t4 - rangingStartTime) / 1000000000;
-        double Da = ((double) t5 - t4) / 1000000000;
+        double Ra = ((double) st4 - rangingStartTime) / 1000000000;
+        double Da = ((double) st5 - st4) / 1000000000;
         StringBuilder sb = new StringBuilder();
         sb.append("Ra: " + Ra + "\n");
         sb.append("Da: " + Da);
@@ -729,12 +735,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         startSoundRanging = false;
         rangingStartTime = null;
-        t4 = null;
-        t5 = null;
+        st4 = null;
+        st5 = null;
         currTime = null;
         signalReceived = false;
         prevReceiverSignalReceived = null;
-        firstTime = true;
+        sTransIter = 0;
         transmitterStopRecording = false;
       }
     });
@@ -790,24 +796,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
       }
     });
 
-    // handle heavy click vibration button
-    bHeavyClickVibration.setOnClickListener(new View.OnClickListener() {
-      @Override
-      public void onClick(View v) {
-        final VibrationEffect vibrationEffect5;
-
-        // this type of vibration requires API 29
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-
-          // create vibrator effect with the constant EFFECT_HEAVY_CLICK
-          vibrationEffect5 = VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK);
-
-          // it is safe to cancel other vibrations currently taking place
-          vibrator.cancel();
-          vibrator.vibrate(vibrationEffect5);
-        }
-      }
-    });
   }
 
   @Override
