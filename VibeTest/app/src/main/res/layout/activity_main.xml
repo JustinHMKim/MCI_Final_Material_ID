@@ -15,7 +15,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="64dp"
         android:backgroundTint="@color/colorPrimary"
-        android:text="NORMAL VIBRATION"
+        android:text="transmitter start"
         android:textColor="@android:color/white"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -35,30 +35,8 @@
         app:layout_constraintTop_toBottomOf="@id/normalVibrationButton" />
 
     <!--Button to generate double click vibration-->
-    <Button
-        android:id="@+id/doubleClickVibrationButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:backgroundTint="@color/colorPrimary"
-        android:text="CreateFile"
-        android:textColor="@android:color/white"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/clickVibrationButton" />
 
     <!--Button to generate tick vibration-->
-    <Button
-        android:id="@+id/tickVibrationButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:backgroundTint="@color/colorPrimary"
-        android:text="Toggle On/Off"
-        android:textColor="@android:color/white"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/doubleClickVibrationButton" />
 
     <!--Button to generate heavy click vibration-->
 
@@ -66,28 +44,15 @@
         android:id="@+id/startStopButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="140dp"
-        android:backgroundTint="@color/colorPrimary"
-        android:text="Play"
-        android:textColor="@android:color/white"
-        app:layout_constraintHorizontal_bias="0.495"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tickVibrationButton" />
-
-
-    <Button
-        android:id="@+id/startStopButton2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="196dp"
+        android:layout_marginTop="252dp"
         android:backgroundTint="@color/colorPrimary"
         android:text="Record"
         android:textColor="@android:color/white"
         app:layout_constraintHorizontal_bias="0.495"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tickVibrationButton" />
+        app:layout_constraintTop_toBottomOf="@+id/clickVibrationButton" />
+
 
     <ImageView android:id="@+id/ImageView01"
         android:layout_width="wrap_content"
@@ -96,5 +61,19 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
     </ImageView>
+
+    <Button
+        android:id="@+id/receiverTrigger"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="158dp"
+        android:layout_marginTop="135dp"
+        android:layout_marginEnd="159dp"
+        android:layout_marginBottom="69dp"
+        android:text="Receiver Trigger"
+        app:layout_constraintBottom_toTopOf="@+id/startStopButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/clickVibrationButton" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
